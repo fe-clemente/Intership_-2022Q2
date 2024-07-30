@@ -2,109 +2,93 @@ import pandas as pd
 import numpy as np
 from datetime import timedelta, datetime
 
+def calculate_future_value(capital, rate, period):
+    return capital * (1 + rate) ** period
 
-# Função para calcular o valor futuro com juros compostos
-def calcular_juros_compostos(capital_inicial, taxa_juros, periodo):
-    return capital_inicial * (1 + taxa_juros) ** periodo
+def calculate_total_profit(df, capital, start_date, end_date, frequency):
+    df_period = df[(df.index >= start_date) & (df.index <= end_date)]
 
-
-# Função para calcular o lucro total
-def calcular_lucro(df, capital_inicial, start_date, end_date, frequency):
-    df_periodo = df[(df.index >= start_date) & (df.index <= end_date)]
-
-    if frequency == 'dia':
-        periodos = len(df_periodo)
-        taxa_juros = df_periodo['SELIC'].mean() / 100
-    elif frequency == 'mês':
-        df_resampled = df_periodo.resample('ME').mean()
-        periodos = len(df_resampled)
-        taxa_juros = df_resampled['SELIC'].mean() / 100
-    elif frequency == 'ano':
-        df_resampled = df_periodo.resample('A').mean()
-        periodos = len(df_resampled)
-        taxa_juros = df_resampled['SELIC'].mean() / 100
+    if frequency == 'day':
+        periods = len(df_period)
+        rate = df_period['SELIC'].mean() / 100
+    elif frequency == 'month':
+        df_resampled = df_period.resample('ME').mean()  # Updated here
+        periods = len(df_resampled)
+        rate = df_resampled['SELIC'].mean() / 100
+    elif frequency == 'year':
+        df_resampled = df_period.resample('A').mean()
+        periods = len(df_resampled)
+        rate = df_resampled['SELIC'].mean() / 100
     else:
-        raise ValueError("Frequência inválida. Use 'dia', 'mês' ou 'ano'.")
+        raise ValueError("Invalid frequency. Use 'day', 'month' or 'year'.")
 
-    lucro_total = calcular_juros_compostos(capital_inicial, taxa_juros, periodos)
-    return lucro_total
+    total_profit = calculate_future_value(capital, rate, periods)
+    return total_profit
 
+def find_most_profitable_period(df, capital, period_days, start_date, end_date):
+    max_profit = -float('inf')
+    best_start = None
+    best_end = None
 
-# Função para encontrar o período mais lucrativo
-def periodo_mais_lucrativo(df, capital_inicial, periodo_dias, start_date, end_date):
-    max_lucro = -float('inf')
-    melhor_inicio = None
-    melhor_fim = None
+    dates = pd.date_range(start=start_date, end=end_date - pd.Timedelta(days=period_days))
 
-    datas = pd.date_range(start=start_date, end=end_date - pd.Timedelta(days=periodo_dias))
+    for start in dates:
+        end = start + pd.Timedelta(days=period_days)
+        profit = calculate_total_profit(df, capital, start, end, 'day')
+        if profit > max_profit:
+            max_profit = profit
+            best_start = start
+            best_end = end
 
-    for start in datas:
-        end = start + pd.Timedelta(days=periodo_dias)
-        lucro = calcular_lucro(df, capital_inicial, start, end, 'dia')
-        if lucro > max_lucro:
-            max_lucro = lucro
-            melhor_inicio = start
-            melhor_fim = end
+    return best_start, best_end, max_profit
 
-    return melhor_inicio, melhor_fim, max_lucro
+def calculate_monthly_profit(df, capital, start_date, end_date):
+    df_period = df[(df.index >= start_date) & (df.index <= end_date)]
+    df_monthly = df_period.resample('ME').mean()  # Updated here
 
+    print(f"Monthly profit from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}:")
 
-# Função para calcular e imprimir o lucro mensal
-def lucro_mensal(df, capital_inicial, start_date, end_date):
-    df_periodo = df[(df.index >= start_date) & (df.index <= end_date)]
-    df_mensal = df_periodo.resample('ME').mean()
+    monthly_profits = []
+    for date, row in df_monthly.iterrows():
+        rate = row['SELIC'] / 100
+        profit = calculate_future_value(capital, rate, 1) - capital
+        monthly_profits.append((date.strftime('%m/%Y'), profit))
+        print(f"{date.strftime('%m/%Y')} $ {profit:,.2f}")
 
-    print(f"Lucro mês a mês de {start_date.strftime('%Y-%m-%d')} a {end_date.strftime('%Y-%m-%d')}:")
+    return pd.DataFrame(monthly_profits, columns=['Date', 'Profit'])
 
-    lucros_mensais = []
-    for date, row in df_mensal.iterrows():
-        taxa_juros = row['SELIC'] / 100
-        lucro = calcular_juros_compostos(capital_inicial, taxa_juros, 1) - capital_inicial
-        lucros_mensais.append((date.strftime('%m/%Y'), lucro))
-        print(f"{date.strftime('%m/%Y')} R$ {lucro:,.2f}")
+def format_profit(total_profit):
+    return f"${total_profit:,.2f}"
 
-    return pd.DataFrame(lucros_mensais, columns=['Data', 'Lucro'])
-
-
-# Função para formatar o lucro total
-def formatar_lucro_total(lucro_total):
-    lucro_str = f"{lucro_total:,.2f}"
-    partes = lucro_str.split(',')
-    partes_formatadas = [f"R$ {parte.strip()}" for parte in partes]
-    return ' '.join(partes_formatadas)
-
-
-# Função principal
 def main():
-    # Gerar dados simulados
     dates = pd.date_range(start='2000-01-01', end='2022-03-31', freq='D')
-    np.random.seed(0)  # Para reprodutibilidade
-    selic_rates = np.random.uniform(low=3.0, high=15.0, size=len(dates))  # Taxas SELIC simuladas
+    np.random.seed(0)
+    selic_rates = np.random.uniform(low=3.0, high=15.0, size=len(dates))
 
     df = pd.DataFrame({'SELIC': selic_rates}, index=dates)
 
-    capital_inicial = 1500
-    periodo_dias = 500
+    initial_capital = 1500
+    period_days = 500
     start_date = pd.to_datetime('2000-01-01')
     end_date = pd.to_datetime('2022-03-31')
 
-    inicio, fim, lucro = periodo_mais_lucrativo(df, capital_inicial, periodo_dias, start_date, end_date)
+    best_start, best_end, profit = find_most_profitable_period(df, initial_capital, period_days, start_date, end_date)
 
-    print("O período mais lucrativo de 500 dias corridos desde 2000-01-01 até 2022-03-31 foi:")
-    print(f"Início: {inicio.strftime('%Y-%m-%d')}")
-    print(f"Término: {fim.strftime('%Y-%m-%d')}")
+    print("The most profitable period of 500 days from 2000-01-01 to 2022-03-31 was:")
+    print(f"Start: {best_start.strftime('%Y-%m-%d')}")
+    print(f"End: {best_end.strftime('%Y-%m-%d')}")
 
-    lucro_total = calcular_lucro(df, capital_inicial, inicio, fim, 'dia')
-    lucro_total_formatado = formatar_lucro_total(lucro_total)
-    print(f"Se eu tivesse investido R$ {capital_inicial} do início de 2000 até março de 2022, teria um lucro de:")
-    print(f"{lucro_total_formatado}")
+    total_profit = calculate_total_profit(df, initial_capital, best_start, best_end, 'day')
+    formatted_total_profit = format_profit(total_profit)
+    print(f"If I had invested $ {initial_capital} from the beginning of 2000 to March 2022, the profit would be:")
+    print(f"{formatted_total_profit}")
 
-    df_lucro_mensal = lucro_mensal(df, capital_inicial, inicio, fim)
+    df_monthly_profit = calculate_monthly_profit(df, initial_capital, best_start, best_end)
 
-    lucro_total_mensal = df_lucro_mensal['Lucro'].sum()
-    lucro_total_mensal_formatado = formatar_lucro_total(lucro_total_mensal)
-    print(f"\nSoma dos lucros mensais: {lucro_total_mensal_formatado}")
+    total_monthly_profit = df_monthly_profit['Profit'].sum()
+    formatted_total_monthly_profit = format_profit(total_monthly_profit)
+    print(f"\nTotal monthly profits: {formatted_total_monthly_profit}")
 
-
+# if teste deletado nao usei mais, det do git tbm
 if __name__ == "__main__":
     main()
