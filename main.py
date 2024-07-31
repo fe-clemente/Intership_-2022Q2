@@ -89,6 +89,6 @@ def main():
     formatted_total_monthly_profit = format_profit(total_monthly_profit)
     print(f"\nTotal monthly profits: {formatted_total_monthly_profit}")
 
-# if teste deletado nao usei mais, det do git tbm
+# if teste deletado nao usei mais, det do git tbm OK
 if __name__ == "__main__":
     main()
